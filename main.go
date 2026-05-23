@@ -7,22 +7,33 @@ import (
 	"time"
 )
 
-type CheckList struct {
-
+type CheckResult struct {
+	URL        string
+	Error      string
+	Status     string
+	StatusCode int
+	ResponseMS int64
+	CheckedAt  time.Time
 }
 
-func checkWebsite(url string) {
+func checkWebsite(url string) CheckResult {
+
+	var result CheckResult
+
+	result.URL = url
 
 	if strings.Contains(url, "localhost") || strings.Contains(url, "127.0.0.1") {
 
-		fmt.Printf("BLOCKED %s - INTERNAL URL RESTRICTED\n", url)
-		return
+		result.Status = "BLOCKED"
+		result.Error = "Internal URL'S restricted"
+		return result
 	}
 
 	if !strings.HasPrefix(url, "https://") {
 
-		fmt.Printf("BLOCKED %s -  NOT SECURED by https\n", url)
-		return
+		result.Status = "REJECTED"
+		result.Error = "HTTPS Required"
+		return result
 	}
 
 	client := &http.Client{
@@ -30,28 +41,36 @@ func checkWebsite(url string) {
 		Timeout: 5 * time.Second,
 	}
 
-	start := time.Now()
+	result.CheckedAt = time.Now()
 
 	resp, err := client.Get(url)
 
-	duration := time.Since(start)
+	duration := time.Since(result.CheckedAt)
 
 	if err != nil {
-		fmt.Printf("Website %s not found\n", url)
-		return
+
+		result.Error = err.Error()
+		result.Status = "ERROR"
+		return result
 	}
 
 	defer resp.Body.Close()
 
+	result.StatusCode = resp.StatusCode
+
 	if resp.StatusCode == http.StatusOK {
 
-		fmt.Printf("Status of URL %s : %d\n", url, resp.StatusCode)
+		result.Status = "UP"
+		result.ResponseMS = duration.Milliseconds()
 
 	} else {
 
-		fmt.Printf("WARN - %s - STATUS - %d (%dms)\n", url, resp.StatusCode, duration.Milliseconds())
-		return
+		result.Status = "DOWN"
+		result.Error = "Website Content not accessible"
+
 	}
+
+	return result
 
 }
 
@@ -68,7 +87,9 @@ func main() {
 
 	for _, url := range urls {
 
-		checkWebsite(url)
+		res := checkWebsite(url)
+		fmt.Printf("%+v\n", res)
+
 	}
 
 }

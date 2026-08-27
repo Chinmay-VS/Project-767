@@ -1,24 +1,18 @@
 # Project-767( Concurrent Synthetic Network Monitor)
 
 
-A production-ready, highly optimized concurrent network monitoring tool engineered in Go (Golang). The system utilizes a fixed-size worker pool architecture to validate the operational availability, response latency, and security configurations of multiple remote endpoints simultaneously.
 
-## Architectural Deep-Dive & Patterns Used
+A concurrent network checking tool built in Go. It sends HTTP requests to a list of URLs to track their status, uptime, and response speed in milliseconds. 
 
-### 1. Resource Optimization (Worker Pool Strategy)
-Instead of spawning an unbounded number of goroutines—which can trigger RAM overhead and destination IP blacklisting—this engine instantiates a bounded **Worker Pool (`numWorkers = 3`)**. A buffered `jobs` channel behaves as a thread-safe task queue, distributing traffic targets evenly across static worker instances.
+## How It Works
 
-### 2. Deadlock Avoidance & Memory Safety
-* **Non-Blocking Orchestration:** The completion tracker (`wg.Wait()`) and result lifecycle pipeline are decoupled inside an independent supervisor goroutine. This guarantees that the unbuffered `resultsChan` never causes a thread deadlock.
-* **Safe Channel Closure:** Closing the `jobs` channel acts as an explicit broadcast to all worker loops to wind down execution and exit cleanly once the task queue drains completely.
+1. **Fixed Worker Pool:** Instead of launching a brand-new goroutine for every single website (which overloads memory and gets your IP banned), the script creates a small, fixed pool of 3 workers.
+2. **Task Queuing:** The main function sends URLs into a buffered `jobs` channel. The 3 workers read from this queue simultaneously, process the network checks, and pass the data into a `resultsChan`.
+3. **Deadlock Prevention:** The `wg.Wait()` and `close(resultsChan)` sequences run inside their own background goroutine. This stops the main thread from blocking or hanging on the unbuffered channel.
+4. **Basic Security Checks:** Before making an actual HTTP request, the script filters out `localhost` and `127.0.0.1` addresses to protect against internal network exploits, and strictly requires the `https://` prefix.
 
-### 3. Network Security & SSRF Mitigation
-To prevent Server-Side Request Forgery (SSRF) exploits, the monitor parses and enforces explicit network perimeter guards before issuing HTTP client dispatches:
-* Enforces structural string filters targeting `localhost` and loopback addresses (`127.0.0.1`).
-* Restricts transport layer requests strictly to secure `https://` schemas.
-* Implements a tight 5-second connection `http.Client` timeout block to avoid hung connections.
-
-## 🛠️ Tech Stack & Implementation Details
-* **Language:** Go (Golang)
-* **Standard Library Primitives:** `sync.WaitGroup`, `net/http`, `time`, `strings`
-* **Concurrency Mechanics:** Channel streaming (`<-chan`, `chan<-`), Explicit for-range channel drains, Multiplexed control loops.
+## Tech Stack & Go Features Used
+* Go (Golang)
+* Concurrency tracking using sync.WaitGroup
+* Thread-safe data communication via Channels
+* Basic network request handling with net/http
